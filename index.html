@@ -11,7 +11,7 @@
 	<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
 	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 	<!-- jsPDF -->
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.3.2/jspdf.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.3.4/jspdf.min.js"></script>
 
 	<title>CheckAvi</title>
 </head>
@@ -22,8 +22,7 @@
 			<div class="jumbotron">
 				<h2>CheckAvi - Checklist de Accesibilidad en Videojuegos</h2>
 				<br>
-				<p>Mediante esta lista de verificación puede identificar las características de accesibilidad que ya
-					tiene o que le falta por incluir en un videojuego</p>
+				<p>Mediante esta lista de verificación puede identificar las características de accesibilidad que ya tiene o que le falta por incluir en un videojuego</p>
 			</div>
 		</div>
 
@@ -94,12 +93,12 @@
 				</div>
 			</div>
 			<br>
-			<br>
-			<div class="row text-center">
-				<div class="col-sm-12">
-					<button onclick="Convert_HTML_To_PDF();" type="button" class="btn btn-primary">Descargar reporte</button>
-				</div>
-			</div>
+			<br>	
+		</div>
+	</div>
+	<div class="row text-center">
+		<div class="col-sm-12">
+			<button onclick="exportPDF();" type="button" class="btn btn-primary">Descargar reporte</button>
 		</div>
 	</div>
 
@@ -112,46 +111,52 @@
 			$('.progress-bar').css('width', emptyValue + '%').attr('aria-valuenow', emptyValue).html(emptyValue + '%');;
 		});
 
-		function Convert_HTML_To_PDF() {
-			var elementHTML = document.getElementById('contentToPrint');
-
-			html2canvas(elementHTML, {
-				useCORS: true,
-				onrendered: function (canvas) {
-					var pdf = new jsPDF('p', 'pt', 'letter');
-
-					var pageHeight = 980;
-					var pageWidth = 900;
-					for (var i = 0; i <= elementHTML.clientHeight / pageHeight; i++) {
-						var srcImg = canvas;
-						var sX = 0;
-						var sY = pageHeight * i; // start 1 pageHeight down for every new page
-						var sWidth = pageWidth;
-						var sHeight = pageHeight;
-						var dX = 0;
-						var dY = 0;
-						var dWidth = pageWidth;
-						var dHeight = pageHeight;
-
-						window.onePageCanvas = document.createElement("canvas");
-						onePageCanvas.setAttribute('width', pageWidth);
-						onePageCanvas.setAttribute('height', pageHeight);
-						var ctx = onePageCanvas.getContext('2d');
-						ctx.drawImage(srcImg, sX, sY, sWidth, sHeight, dX, dY, dWidth, dHeight);
-
-						var canvasDataURL = onePageCanvas.toDataURL("image/png", 1.0);
-						var width = onePageCanvas.width;
-						var height = onePageCanvas.clientHeight;
-
-						if (i > 0) // if we're on anything other than the first page, add another page
-							pdf.addPage(612, 864); // 8.5" x 12" in pts (inches*72)
-
-						pdf.setPage(i + 1); // now we declare that we're working on that page
-						pdf.addImage(canvasDataURL, 'PNG', 20, 40, (width * .62), (height * .62)); // add content to the page
+		function exportPDF() {
+			var pdf = new jsPDF('l', 'px'),source = $('#contentToPrint')[0];
+			var canvasToImage = function (canvas) {
+				var img = new Image();
+				var dataURL = canvas.toDataURL('image/png');
+				img.src = dataURL;
+				return img;
+			};
+			var canvasShiftImage = function (oldCanvas, shiftAmt) {
+				shiftAmt = parseInt(shiftAmt) || 0;
+				if (!shiftAmt) {
+					return oldCanvas;
+				}
+				var newCanvas = document.createElement('canvas');
+				newCanvas.height = oldCanvas.height - shiftAmt;
+				newCanvas.width = oldCanvas.width;
+				var ctx = newCanvas.getContext('2d');
+				var img = canvasToImage(oldCanvas);
+				ctx.drawImage(img, 0, shiftAmt, img.width, img.height, 0, 0, img.width, img.height);
+				return newCanvas;
+			};
+			var canvasToImageSuccess = function (canvas) {
+				var pdf = new jsPDF('l', 'px'),
+					pdfInternals = pdf.internal,
+					pdfPageSize = pdfInternals.pageSize,
+					pdfScaleFactor = pdfInternals.scaleFactor,
+					pdfPageWidth = pdfPageSize.width,
+					pdfPageHeight = pdfPageSize.height,
+					totalPdfHeight = 0,
+					htmlPageHeight = canvas.height,
+					htmlScaleFactor = canvas.width / (pdfPageWidth * pdfScaleFactor),
+					safetyNet = 0;
+				while (totalPdfHeight < htmlPageHeight && safetyNet < 15) {
+					var newCanvas = canvasShiftImage(canvas, totalPdfHeight);
+					pdf.addImage(newCanvas, 'png', 0, 0, pdfPageWidth, 0, null, 'NONE');
+					totalPdfHeight += (pdfPageHeight * pdfScaleFactor * htmlScaleFactor);
+					if (totalPdfHeight < htmlPageHeight) {
+						pdf.addPage();
 					}
-
-					// Save the PDF
-					pdf.save('document.pdf');
+					safetyNet++;
+				}
+				pdf.save('reporte_accesibilidad.pdf');
+			};
+			html2canvas(source, {
+				onrendered: function (canvas) {
+					canvasToImageSuccess(canvas);
 				}
 			});
 		}
